@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<meta name="theme-color" content="#101616">
+	<title>Slice Club</title>
+	<style>
+		:root {
+			color-scheme: dark;
+			--ink: #f7f7ef;
+			--muted: #a0aaa3;
+			--glass: rgba(17, 27, 25, .76);
+			--line: rgba(238, 255, 245, .14);
+			--mint: #b9ff76;
+			--aqua: #72f3e1;
+			--coral: #ff796b;
+			--gold: #ffd16c;
+			--display: "Trebuchet MS", "Avenir Next", sans-serif;
+			--body: "Segoe UI", "Helvetica Neue", sans-serif;
+		}
+		* { box-sizing: border-box; }
+		html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+		body {
+			background: #101616;
+			color: var(--ink);
+			font-family: var(--body);
+			-webkit-font-smoothing: antialiased;
+			touch-action: none;
+			user-select: none;
+		}
+		button, input { font: inherit; }
+		button { color: inherit; }
+		#game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+		.grain {
+			position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: .13;
+			background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E");
+		}
+		.topbar {
+			position: fixed; z-index: 3; top: max(20px, env(safe-area-inset-top)); left: 22px; right: 22px;
+			display: flex; justify-content: space-between; align-items: center; pointer-events: none;
+		}
+		.brand { display: flex; align-items: center; gap: 9px; color: var(--ink); font: 800 14px var(--display); letter-spacing: 1px; text-transform: uppercase; }
+		.brand-mark { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid rgba(185,255,118,.62); border-radius: 7px 7px 7px 2px; color: var(--mint); font-size: 13px; transform: rotate(-8deg); }
+		.top-actions { display: flex; align-items: center; gap: 9px; pointer-events: auto; }
+		.coin-pill, .sound-button {
+			height: 38px; border: 1px solid var(--line); background: rgba(18,27,26,.62); backdrop-filter: blur(16px);
+			border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-size: 12px; font-weight: 700;
+		}
+		.coin-dot { color: var(--gold); font-size: 15px; line-height: 1; }
+		.sound-button { cursor: pointer; color: var(--muted); transition: color .18s, border-color .18s; }
+		.sound-button:hover { color: var(--ink); border-color: rgba(238,255,245,.36); }
+		.overlay {
+			position: fixed; inset: 0; z-index: 2; display: grid; place-items: center;
+			padding: 72px 20px max(22px, env(safe-area-inset-bottom)); overflow-y: auto;
+		}
+		.overlay[hidden], .hud[hidden] { display: none; }
+		.panel {
+			width: min(100%, 434px); position: relative; overflow: hidden;
+			border: 1px solid rgba(235,255,245,.17); border-radius: 18px;
+			background: linear-gradient(145deg, rgba(29,43,39,.88), rgba(17,25,24,.76));
+			box-shadow: 0 24px 90px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.08);
+			backdrop-filter: blur(24px); animation: panel-in .48s cubic-bezier(.2,.75,.25,1) both;
+		}
+		.panel::before { content: ""; position: absolute; width: 260px; height: 180px; top: -130px; right: -80px; background: rgba(185,255,118,.12); filter: blur(55px); pointer-events: none; }
+		@keyframes panel-in { from { opacity: 0; transform: translateY(13px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+		.menu-panel { padding: 34px 36px 29px; }
+		.eyebrow { color: var(--mint); text-transform: uppercase; font-size: 10px; letter-spacing: 2px; font-weight: 800; }
+		h1, h2, p { margin: 0; }
+		.hero-title { font: 900 clamp(46px, 11vw, 66px)/.9 var(--display); letter-spacing: -2px; margin: 17px 0 13px; }
+		.hero-title span { color: var(--mint); }
+		.tagline { color: #b0bbb4; font-size: 13px; line-height: 1.6; max-width: 290px; }
+		.menu-stats { margin: 26px 0 22px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 15px 0; display: flex; gap: 30px; }
+		.stat-label { color: #85928a; text-transform: uppercase; letter-spacing: 1.2px; font-size: 9px; font-weight: 800; margin-bottom: 5px; }
+		.stat-value { font: 800 19px var(--display); }
+		.stat-value small { color: var(--muted); font: 600 11px var(--body); }
+		.button-stack { display: grid; gap: 9px; }
+		.button {
+			border: 1px solid transparent; border-radius: 8px; height: 48px; padding: 0 17px; cursor: pointer;
+			display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+			font-size: 11px; letter-spacing: 1px; text-transform: uppercase; font-weight: 900;
+			transition: transform .16s, background .16s, border-color .16s, color .16s; -webkit-tap-highlight-color: transparent;
+		}
+		.button:hover { transform: translateY(-2px); }
+		.button:active { transform: translateY(0) scale(.985); }
+		.button-primary { color: #152018; background: var(--mint); box-shadow: 0 5px 24px rgba(185,255,118,.13); }
+		.button-primary:hover { background: #cbff9b; }
+		.button-secondary { color: var(--ink); background: rgba(255,255,255,.035); border-color: var(--line); }
+		.button-secondary:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.28); }
+		.button-danger { color: white; background: #ee635a; }
+		.menu-foot { display: flex; justify-content: space-between; color: #809088; font-size: 10px; margin-top: 20px; }
+		.screen-panel { padding: 27px 29px 25px; max-height: min(690px, calc(100dvh - 105px)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #5a6b62 transparent; }
+		.screen-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+		.screen-heading h2 { font: 800 28px/1.1 var(--display); margin-top: 6px; }
+		.screen-heading p { color: var(--muted); font-size: 12px; margin-top: 7px; }
+		.close-button { background: transparent; border: 1px solid var(--line); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 17px; color: var(--muted); }
+		.close-button:hover { color: var(--ink); background: rgba(255,255,255,.08); }
+		.blade-preview {
+			height: 112px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px;
+			background: radial-gradient(ellipse at 50% 100%, rgba(114,243,225,.15), transparent 61%), rgba(255,255,255,.025);
+			display: grid; place-items: center; position: relative; overflow: hidden;
+		}
+		.blade-preview::after { content: ""; width: 140px; height: 2px; background: var(--blade-color, var(--aqua)); box-shadow: 0 0 12px 3px var(--blade-color, var(--aqua)); transform: rotate(-28deg); border-radius: 2px; animation: blade-flash 2s ease-in-out infinite; }
+		@keyframes blade-flash { 50% { opacity: .35; transform: rotate(-28deg) translateX(9px); } }
+		.shop-list { display: grid; gap: 8px; }
+		.shop-item { width: 100%; border: 1px solid var(--line); background: rgba(255,255,255,.025); border-radius: 10px; padding: 11px 12px; cursor: pointer; display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 11px; text-align: left; transition: background .15s, border-color .15s; }
+		.shop-item:hover, .shop-item.selected { background: rgba(255,255,255,.07); border-color: rgba(185,255,118,.49); }
+		.swatch { width: 11px; height: 28px; border-radius: 8px; box-shadow: 0 0 12px currentColor; }
+		.item-name { font-size: 12px; font-weight: 800; }
+		.item-style { color: #93a098; font-size: 10px; margin-top: 4px; }
+		.item-price { font-size: 10px; font-weight: 900; color: var(--gold); white-space: nowrap; }
+		.item-price.owned { color: var(--mint); }
+		.shop-feedback { height: 17px; margin-top: 10px; color: var(--muted); font-size: 10px; text-align: center; }
+		.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 0; border-top: 1px solid var(--line); }
+		.setting-row strong { font-size: 12px; }
+		.setting-row p { color: var(--muted); font-size: 10px; margin-top: 4px; }
+		.segmented { display: flex; padding: 3px; border-radius: 7px; border: 1px solid var(--line); background: rgba(0,0,0,.15); }
+		.segmented button { border: 0; cursor: pointer; background: transparent; color: #a5b0a8; border-radius: 5px; padding: 6px 8px; font-size: 9px; font-weight: 800; }
+		.segmented button.active { background: var(--mint); color: #172018; }
+		.volume-control { display: flex; align-items: center; gap: 10px; width: 145px; }
+		input[type="range"] { width: 100%; accent-color: var(--mint); height: 4px; }
+		.volume-value { color: var(--muted); font-size: 10px; width: 27px; text-align: right; }
+		.hud { position: fixed; z-index: 3; inset: 0; pointer-events: none; }
+		.hud-top { position: absolute; top: max(75px, calc(env(safe-area-inset-top) + 62px)); left: 22px; right: 22px; display: flex; justify-content: space-between; align-items: flex-start; }
+		.score-block { text-shadow: 0 2px 18px rgba(0,0,0,.4); }
+		.hud-label { color: rgba(242,250,244,.65); font-size: 9px; letter-spacing: 1.7px; font-weight: 900; text-transform: uppercase; }
+		.score-number { font: 900 42px/.98 var(--display); margin-top: 5px; }
+		.combo-label { color: var(--mint); font-size: 11px; font-weight: 900; letter-spacing: 1px; height: 18px; margin-top: 5px; }
+		.hud-right { display: flex; align-items: flex-start; gap: 11px; }
+		.hud-coins { padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: rgba(16,25,23,.65); backdrop-filter: blur(12px); font-size: 12px; font-weight: 800; }
+		.pause-button { width: 40px; height: 40px; pointer-events: auto; background: rgba(16,25,23,.72); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 16px; }
+		.pause-button:hover { border-color: var(--mint); }
+		.game-hint { position: absolute; bottom: max(25px, env(safe-area-inset-bottom)); left: 0; width: 100%; text-align: center; color: rgba(233,245,237,.43); font-size: 10px; letter-spacing: 1.3px; text-transform: uppercase; }
+		.result-score { font: 900 56px/.95 var(--display); margin: 8px 0 19px; }
+		.result-grid { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+		.result-grid > div { padding: 14px 0; }
+		.result-grid > div:nth-child(even) { text-align: right; }
+		.result-grid strong { display: block; font: 800 19px var(--display); }
+		.result-grid span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: 1px; }
+		.result-note { font-size: 12px; color: #c6d0c9; margin: -8px 0 18px; }
+		.button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+		.pause-title { font: 900 42px var(--display); margin: 12px 0 7px; }
+		@media (max-width: 560px) {
+			.topbar { left: 15px; right: 15px; }
+			.overlay { padding: 64px 15px max(16px, env(safe-area-inset-bottom)); }
+			.menu-panel { padding: 29px 25px 23px; }
+			.screen-panel { padding: 23px 21px 20px; }
+			.hud-top { left: 16px; right: 16px; top: max(69px, calc(env(safe-area-inset-top) + 57px)); }
+			.score-number { font-size: 37px; }
+			.coin-pill { padding: 0 11px; }
+			.sound-button { padding: 0 11px; }
+		}
+		@media (max-height: 650px) and (min-width: 561px) {
+			.menu-panel { padding-top: 23px; padding-bottom: 20px; }
+			.hero-title { font-size: 54px; margin: 12px 0 9px; }
+			.menu-stats { margin: 16px 0 15px; }
+			.menu-foot { margin-top: 13px; }
+		}
+		@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+	</style>
+</head>
+<body>
+	<canvas id="game-canvas" aria-label="Block Slicer game field"></canvas>
+	<div class="grain" aria-hidden="true"></div>
+	<header class="topbar">
+		<div class="brand"><span class="brand-mark">/</span> Slice Club</div>
+		<div class="top-actions">
+			<div class="coin-pill"><span class="coin-dot">*</span><span id="menu-coins">0</span></div>
+			<button class="sound-button" id="sound-toggle" aria-label="Toggle sound">SFX ON</button>
+		</div>
+	</header>
+	<section class="hud" id="hud" hidden aria-live="polite">
+		<div class="hud-top">
+			<div class="score-block"><div class="hud-label">Score</div><div class="score-number" id="score">0</div><div class="combo-label" id="combo"></div></div>
+			<div class="hud-right"><div class="hud-coins"><span class="coin-dot">*</span> <span id="round-coins">0</span></div><button class="pause-button" id="pause-button" aria-label="Pause game">||</button></div>
+		</div>
+		<div class="game-hint">Swipe through the shapes. Keep clear of bombs.</div>
+	</section>
+	<main>
+		<section class="overlay" id="menu-screen">
+			<div class="panel menu-panel">
+				<div class="eyebrow">An arcade game for your fingertips</div>
+				<h1 class="hero-title">Slice<br><span>the rush.</span></h1>
+				<p class="tagline">Clean cuts. Big combos. One very important rule: don't touch the bombs.</p>
+				<div class="menu-stats">
+					<div><div class="stat-label">Best run</div><div class="stat-value" id="menu-best">0 <small>pts</small></div></div>
+					<div><div class="stat-label">Blade equipped</div><div class="stat-value" id="menu-blade">Laser</div></div>
+				</div>
+				<div class="button-stack">
+					<button class="button button-primary" id="play-button">Play now <span aria-hidden="true">&gt;</span></button>
+					<button class="button button-secondary" id="shop-button">Blade shop</button>
+					<button class="button button-secondary" id="settings-button">Settings</button>
+				</div>
+				<div class="menu-foot"><span>Mouse or touch</span><span>Best score saves automatically</span></div>
+			</div>
+		</section>
+		<section class="overlay" id="shop-screen" hidden>
+			<div class="panel screen-panel">
+				<div class="screen-heading"><div><div class="eyebrow">Make every cut yours</div><h2>Blade shop</h2><p>Coins: <strong id="shop-coins">0</strong></p></div><button class="close-button" data-menu aria-label="Back to menu">x</button></div>
+				<div class="blade-preview" id="blade-preview"></div>
+				<div class="shop-list" id="shop-list"></div>
+				<div class="shop-feedback" id="shop-feedback" aria-live="polite"></div>
+			</div>
+		</section>
+		<section class="overlay" id="settings-screen" hidden>
+			<div class="panel screen-panel">
+				<div class="screen-heading"><div><div class="eyebrow">Tune your game</div><h2>Settings</h2><p>Your preferences stay saved.</p></div><button class="close-button" data-menu aria-label="Back to menu">x</button></div>
+				<div class="setting-row"><div><strong>Sound effects</strong><p>Blade, combo and impact sounds</p></div><button class="button button-secondary" id="settings-sound" style="height:34px;padding:0 11px">On</button></div>
+				<div class="setting-row"><div><strong>Audio level</strong><p>Adjust the overall volume</p></div><div class="volume-control"><input type="range" id="volume-slider" min="0" max="100" value="55" aria-label="Audio level"><span class="volume-value" id="volume-value">55%</span></div></div>
+				<div class="setting-row"><div><strong>Particles</strong><p>Visual effects quality</p></div><div class="segmented" id="quality-control"><button data-quality="low">Low</button><button data-quality="medium">Med</button><button data-quality="high">High</button></div></div>
+				<button class="button button-primary" data-menu style="width:100%;margin-top:19px">Done</button>
+			</div>
+		</section>
+		<section class="overlay" id="pause-screen" hidden>
+			<div class="panel menu-panel">
+				<div class="eyebrow">Take a breather</div><h2 class="pause-title">Paused</h2><p class="tagline" style="margin-bottom:24px">Your run is right where you left it.</p>
+				<div class="button-stack"><button class="button button-primary" id="resume-button">Keep slicing</button><button class="button button-secondary" id="pause-menu-button">Return to menu</button></div>
+			</div>
+		</section>
+		<section class="overlay" id="gameover-screen" hidden>
+			<div class="panel menu-panel">
+				<div class="eyebrow" id="result-eyebrow">Bomb detected</div><h2 class="pause-title">Run over.</h2>
+				<div class="stat-label">Final score</div><div class="result-score" id="final-score">0</div>
+				<div class="result-grid"><div><strong id="result-best">0</strong><span>Personal best</span></div><div><strong id="result-coins">0</strong><span>Coins this run</span></div></div>
+				<p class="result-note" id="result-note">Close one. The next run is yours.</p>
+				<div class="button-row"><button class="button button-primary" id="again-button">Play again</button><button class="button button-secondary" id="result-menu-button">Main menu</button></div>
+			</div>
+		</section>
+	</main>
+	<script>
+		(() => {
+			"use strict";
+
+			const canvas = document.querySelector("#game-canvas");
+			const ctx = canvas.getContext("2d", { alpha: false });
+			const hud = document.querySelector("#hud");
+			const screens = Object.fromEntries(["menu", "shop", "settings", "pause", "gameover"].map(name => [name, document.querySelector(`#${name}-screen`)]));
+			const blades = [
+				{ id: "laser", name: "Neon Blue Laser", style: "Clean neon / crisp ping", cost: 0, color: "#75eaff", effect: "laser" },
+				{ id: "flame", name: "Golden Flame Blade", style: "Hot gold / ember burst", cost: 120, color: "#ffbd59", effect: "flame" },
+				{ id: "plasma", name: "Plasma Katana", style: "Cyber magenta / plasma pop", cost: 220, color: "#ff6ca8", effect: "plasma" },
+				{ id: "pixel", name: "Rainbow Pixel Blade", style: "Spectrum / pixel sparkle", cost: 320, color: "#b9ff76", effect: "pixel" }
+			];
+			const storageKey = "slice-club-save-v1";
+			const defaults = { coins: 0, best: 0, earned: 0, owned: ["laser"], equipped: "laser", sound: true, volume: 55, quality: "high" };
+			let save;
+			try { save = { ...defaults, ...JSON.parse(localStorage.getItem(storageKey) || "{}") }; }
+			catch { save = { ...defaults }; }
+			if (!Array.isArray(save.owned)) save.owned = ["laser"];
+			if (!save.owned.includes("laser")) save.owned.unshift("laser");
+			if (!blades.some(blade => blade.id === save.equipped && save.owned.includes(blade.id))) save.equipped = "laser";
+
+			let width = 0, height = 0, pixelRatio = 1;
+			let screen = "menu", objects = [], pieces = [], particles = [], ambience = [];
+			let score = 0, roundCoins = 0, combo = 0, comboTime = 0, spawnTimer = 0, elapsed = 0;
+			let pointer = null, trail = [], shake = 0, shakeTime = 0, failTime = 0, lastFrame = 0;
+			let audioContext = null;
+			const activeBlade = () => blades.find(blade => blade.id === save.equipped) || blades[0];
+			const random = (min, max) => min + Math.random() * (max - min);
+			const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+			function persist() {
+				try { localStorage.setItem(storageKey, JSON.stringify(save)); } catch { /* Storage may be unavailable in private contexts. */ }
+				updateCounters();
+			}
+			function updateCounters() {
+				document.querySelector("#menu-coins").textContent = save.coins;
+				document.querySelector("#shop-coins").textContent = save.coins;
+				document.querySelector("#menu-best").innerHTML = `${save.best} <small>pts</small>`;
+				document.querySelector("#menu-blade").textContent = save.equipped === "laser" ? "Laser" : activeBlade().name.split(" ")[0];
+				document.querySelector("#sound-toggle").textContent = save.sound ? "SFX ON" : "SFX OFF";
+				document.querySelector("#settings-sound").textContent = save.sound ? "On" : "Off";
+			}
+			function showScreen(name) {
+				screen = name;
+				for (const [key, element] of Object.entries(screens)) element.hidden = key !== name;
+				hud.hidden = name !== "playing";
+				canvas.style.cursor = name === "playing" ? "crosshair" : "default";
+				if (name === "menu") updateCounters();
+			}
+			function resize() {
+				pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+				width = window.innerWidth;
+				height = window.innerHeight;
+				canvas.width = Math.round(width * pixelRatio);
+				canvas.height = Math.round(height * pixelRatio);
+				ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+				ambience = Array.from({ length: Math.round(clamp(width * height / 18000, 22, 72)) }, () => ({
+					x: Math.random() * width, y: Math.random() * height, radius: random(1, 2.3), speed: random(5, 19), phase: random(0, 7)
+				}));
+			}
+			window.addEventListener("resize", resize, { passive: true });
+			resize();
+
+			function polygonFor(type, radius) {
+				const count = type === "diamond" ? 4 : type === "hex" ? 6 : type === "star" ? 10 : 5;
+				return Array.from({ length: count }, (_, index) => {
+					const angle = (Math.PI * 2 * index / count) - Math.PI / 2;
+					const size = type === "star" && index % 2 ? radius * .52 : radius * random(.84, 1.12);
+					return { x: Math.cos(angle) * size, y: Math.sin(angle) * size };
+				});
+			}
+			const shapeTypes = ["block", "diamond", "hex", "star"];
+			const colors = ["#ff796b", "#b9ff76", "#70d9ff", "#ffc45e", "#e28cff", "#72f3e1"];
+			function spawnObject() {
+				const isBomb = Math.random() < clamp(.13 + elapsed * .002, .13, .23);
+				const radius = random(24, 36) * (width < 520 ? .88 : 1);
+				const x = random(radius + 12, Math.max(radius + 13, width - radius - 12));
+				const y = height + radius + 12;
+				const type = isBomb ? "bomb" : shapeTypes[Math.floor(Math.random() * shapeTypes.length)];
+				objects.push({
+					type, x, y, radius, vx: random(-190, 190), vy: -random(height * .78, height * 1.17), gravity: random(700, 920),
+					angle: random(-.5, .5), spin: random(-3.5, 3.5), color: isBomb ? "#ff665e" : colors[Math.floor(Math.random() * colors.length)],
+					poly: polygonFor(isBomb ? "bomb" : type, radius), age: 0
+				});
+			}
+			function worldVertices(object) {
+				const cos = Math.cos(object.angle), sin = Math.sin(object.angle);
+				return object.poly.map(point => ({ x: object.x + point.x * cos - point.y * sin, y: object.y + point.x * sin + point.y * cos }));
+			}
+			function cross(a, b, point) { return (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x); }
+			function area(poly) {
+				let total = 0;
+				for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; total += a.x * b.y - b.x * a.y; }
+				return Math.abs(total) * .5;
+			}
+			function clipPolygon(poly, start, end, side) {
+				const clipped = [];
+				for (let i = 0; i < poly.length; i++) {
+					const current = poly[i], next = poly[(i + 1) % poly.length];
+					const currentValue = cross(start, end, current) * side;
+					const nextValue = cross(start, end, next) * side;
+					if (currentValue >= 0) clipped.push(current);
+					if ((currentValue < 0 && nextValue > 0) || (currentValue > 0 && nextValue < 0)) {
+						const t = currentValue / (currentValue - nextValue);
+						clipped.push({ x: current.x + (next.x - current.x) * t, y: current.y + (next.y - current.y) * t });
+					}
+				}
+				return clipped;
+			}
+			function segmentHitsPolygon(start, end, poly) {
+				for (let i = 0; i < poly.length; i++) {
+					const a = poly[i], b = poly[(i + 1) % poly.length];
+					const denominator = (end.x - start.x) * (b.y - a.y) - (end.y - start.y) * (b.x - a.x);
+					if (Math.abs(denominator) < .001) continue;
+					const t = ((a.x - start.x) * (b.y - a.y) - (a.y - start.y) * (b.x - a.x)) / denominator;
+					const u = ((a.x - start.x) * (end.y - start.y) - (a.y - start.y) * (end.x - start.x)) / denominator;
+					if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return true;
+				}
+				return false;
+			}
+			function centerOf(poly) {
+				return poly.reduce((sum, point) => ({ x: sum.x + point.x / poly.length, y: sum.y + point.y / poly.length }), { x: 0, y: 0 });
+			}
+			function particleBurst(x, y, color, count, speed = 210) {
+				const quality = save.quality === "low" ? .45 : save.quality === "medium" ? .72 : 1;
+				const amount = Math.round(count * quality);
+				const cap = save.quality === "low" ? 150 : 280;
+				if (particles.length + amount > cap) particles.splice(0, particles.length + amount - cap);
+				for (let i = 0; i < amount; i++) {
+					const angle = Math.random() * Math.PI * 2, velocity = random(speed * .25, speed);
+					particles.push({ x, y, vx: Math.cos(angle) * velocity, vy: Math.sin(angle) * velocity, radius: random(1.5, 4.2), color, life: random(.35, .8), maxLife: .8, gravity: 240 });
+				}
+			}
+			function sound(frequency, duration = .09, type = "sine", volume = .12, slide = 0) {
+				if (!save.sound || save.volume <= 0) return;
+				try {
+					audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+					if (audioContext.state === "suspended") audioContext.resume();
+					const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
+					const now = audioContext.currentTime, level = volume * (save.volume / 100);
+					oscillator.type = type;
+					oscillator.frequency.setValueAtTime(frequency, now);
+					if (slide) oscillator.frequency.exponentialRampToValueAtTime(Math.max(30, frequency + slide), now + duration);
+					gain.gain.setValueAtTime(level, now);
+					gain.gain.exponentialRampToValueAtTime(.001, now + duration);
+					oscillator.connect(gain); gain.connect(audioContext.destination);
+					oscillator.start(now); oscillator.stop(now + duration);
+				} catch { /* Audio is optional; gameplay remains available without it. */ }
+			}
+			function addPiece(poly, object, side, normal) {
+				const center = centerOf(poly);
+				pieces.push({
+					x: center.x, y: center.y, poly: poly.map(point => ({ x: point.x - center.x, y: point.y - center.y })),
+					vx: object.vx + normal.x * side * 135 + random(-35, 35), vy: object.vy + normal.y * side * 135 + random(-35, 35),
+					gravity: object.gravity, angle: object.angle, spin: object.spin + side * random(1.5, 3), color: object.color, life: 2.3
+				});
+			}
+			function sliceObject(object, start, end) {
+				const vertices = worldVertices(object);
+				const left = clipPolygon(vertices, start, end, 1), right = clipPolygon(vertices, start, end, -1);
+				if (left.length < 3 || right.length < 3 || area(left) < 18 || area(right) < 18) return false;
+				const length = Math.hypot(end.x - start.x, end.y - start.y) || 1;
+				const normal = { x: -(end.y - start.y) / length, y: (end.x - start.x) / length };
+				addPiece(left, object, 1, normal); addPiece(right, object, -1, normal);
+				particleBurst(object.x, object.y, object.color, 15, 180);
+				sound(activeBlade().effect === "flame" ? 300 : 570, .08, activeBlade().effect === "plasma" ? "sawtooth" : "triangle", .09, 260);
+				if (comboTime > 0) combo++; else combo = 1;
+				comboTime = 1.25;
+				const multiplier = Math.min(8, 1 + Math.floor((combo - 1) / 3));
+				score += 10 * multiplier;
+				roundCoins += 1;
+				save.coins += 1;
+				save.earned += 1;
+				persist();
+				document.querySelector("#score").textContent = score;
+				document.querySelector("#round-coins").textContent = roundCoins;
+				document.querySelector("#combo").textContent = combo >= 2 ? `${combo} CUT COMBO  x${multiplier}` : "";
+				if (combo >= 3) { shake = Math.max(shake, 3); shakeTime = .11; }
+				return true;
+			}
+			function triggerBomb(object) {
+				particleBurst(object.x, object.y, "#ff685e", 75, 360);
+				particleBurst(object.x, object.y, "#ffd16c", 28, 250);
+				sound(110, .48, "sawtooth", .24, -75);
+				shake = 17; shakeTime = .55; failTime = .72; objects = [];
+			}
+			function onSwipe(start, end) {
+				if (screen !== "playing" || failTime > 0) return;
+				trail.push({ x: end.x, y: end.y, life: .19 });
+				for (let i = objects.length - 1; i >= 0; i--) {
+					const object = objects[i];
+					const reach = object.radius + 7;
+					const closestX = clamp(start.x, object.x - reach, object.x + reach);
+					const closestY = clamp(start.y, object.y - reach, object.y + reach);
+					if (Math.hypot(closestX - object.x, closestY - object.y) > reach + Math.hypot(end.x - start.x, end.y - start.y)) continue;
+					const vertices = worldVertices(object);
+					if (!segmentHitsPolygon(start, end, vertices)) continue;
+					if (object.type === "bomb") { triggerBomb(object); return; }
+					if (sliceObject(object, start, end)) objects.splice(i, 1);
+				}
+			}
+			canvas.addEventListener("pointerdown", event => {
+				if (screen !== "playing") return;
+				pointer = { x: event.clientX, y: event.clientY };
+				trail.push({ ...pointer, life: .2 });
+				canvas.setPointerCapture?.(event.pointerId);
+			});
+			canvas.addEventListener("pointermove", event => {
+				if (!pointer || screen !== "playing") return;
+				const next = { x: event.clientX, y: event.clientY };
+				onSwipe(pointer, next);
+				pointer = next;
+			});
+			function releasePointer() { pointer = null; }
+			canvas.addEventListener("pointerup", releasePointer);
+			canvas.addEventListener("pointercancel", releasePointer);
+			canvas.addEventListener("lostpointercapture", releasePointer);
+
+			function startGame() {
+				score = 0; roundCoins = 0; combo = 0; comboTime = 0; spawnTimer = .22; elapsed = 0; failTime = 0;
+				objects = []; pieces = []; particles = []; trail = []; shake = 0; pointer = null;
+				document.querySelector("#score").textContent = "0";
+				document.querySelector("#round-coins").textContent = "0";
+				document.querySelector("#combo").textContent = "";
+				showScreen("playing");
+				sound(420, .12, "sine", .1, 260);
+			}
+			function finishGame() {
+				save.best = Math.max(save.best, score);
+				persist();
+				document.querySelector("#final-score").textContent = score;
+				document.querySelector("#result-best").textContent = save.best;
+				document.querySelector("#result-coins").textContent = roundCoins;
+				document.querySelector("#result-note").textContent = score > 0 ? "Close one. The next run is yours." : "A fresh start. Find your rhythm.";
+				showScreen("gameover");
+			}
+			function purchaseBlade(id) {
+				const blade = blades.find(item => item.id === id);
+				if (!blade) return;
+				const feedback = document.querySelector("#shop-feedback");
+				if (save.owned.includes(id)) {
+					save.equipped = id; persist(); renderShop(); feedback.textContent = `${blade.name} equipped.`;
+				} else if (save.coins >= blade.cost) {
+					save.coins -= blade.cost; save.owned.push(id); save.equipped = id; persist(); renderShop(); feedback.textContent = `${blade.name} unlocked and equipped.`;
+					sound(660, .16, "triangle", .12, 330);
+				} else {
+					feedback.textContent = `You need ${blade.cost - save.coins} more coins.`;
+					sound(170, .12, "sine", .08, -40);
+				}
+			}
+			function renderShop() {
+				document.querySelector("#shop-coins").textContent = save.coins;
+				const list = document.querySelector("#shop-list");
+				list.innerHTML = "";
+				for (const blade of blades) {
+					const owned = save.owned.includes(blade.id), equipped = save.equipped === blade.id;
+					const button = document.createElement("button");
+					button.className = `shop-item${equipped ? " selected" : ""}`;
+					button.innerHTML = `<span class="swatch" style="background:${blade.color};color:${blade.color}"></span><span><span class="item-name">${blade.name}</span><span class="item-style">${blade.style}</span></span><span class="item-price${owned ? " owned" : ""}">${equipped ? "EQUIPPED" : owned ? "OWNED" : `${blade.cost} COINS`}</span>`;
+					button.addEventListener("click", () => purchaseBlade(blade.id));
+					list.append(button);
+				}
+				document.querySelector("#blade-preview").style.setProperty("--blade-color", activeBlade().color);
+			}
+			function updateSettings() {
+				document.querySelector("#volume-slider").value = save.volume;
+				document.querySelector("#volume-value").textContent = `${save.volume}%`;
+				for (const button of document.querySelectorAll("[data-quality]")) button.classList.toggle("active", button.dataset.quality === save.quality);
+				updateCounters();
+			}
+			document.querySelector("#play-button").addEventListener("click", startGame);
+			document.querySelector("#again-button").addEventListener("click", startGame);
+			document.querySelector("#shop-button").addEventListener("click", () => { renderShop(); showScreen("shop"); });
+			document.querySelector("#settings-button").addEventListener("click", () => { updateSettings(); showScreen("settings"); });
+			document.querySelector("#sound-toggle").addEventListener("click", () => { save.sound = !save.sound; persist(); updateSettings(); });
+			document.querySelector("#settings-sound").addEventListener("click", () => { save.sound = !save.sound; persist(); updateSettings(); });
+			document.querySelector("#volume-slider").addEventListener("input", event => { save.volume = Number(event.target.value); document.querySelector("#volume-value").textContent = `${save.volume}%`; persist(); });
+			document.querySelector("#quality-control").addEventListener("click", event => {
+				const button = event.target.closest("[data-quality]"); if (!button) return;
+				save.quality = button.dataset.quality; persist(); updateSettings();
+			});
+			for (const button of document.querySelectorAll("[data-menu]")) button.addEventListener("click", () => showScreen("menu"));
+			document.querySelector("#pause-button").addEventListener("click", () => { if (screen === "playing" && failTime === 0) showScreen("pause"); });
+			document.querySelector("#resume-button").addEventListener("click", () => showScreen("playing"));
+			document.querySelector("#pause-menu-button").addEventListener("click", () => { objects = []; pieces = []; pointer = null; showScreen("menu"); });
+			document.querySelector("#result-menu-button").addEventListener("click", () => showScreen("menu"));
+			window.addEventListener("keydown", event => {
+				if (event.code === "Escape" || event.code === "Space") {
+					if (screen === "playing" && failTime === 0) showScreen("pause");
+					else if (screen === "pause") showScreen("playing");
+				}
+			});
+
+			function roundedPoly(poly, radius) {
+				if (!poly.length) return;
+				ctx.beginPath();
+				poly.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+				ctx.closePath();
+				ctx.fill();
+				ctx.strokeStyle = "rgba(255,255,255,.48)";
+				ctx.lineWidth = Math.max(1, radius * .055);
+				ctx.stroke();
+				ctx.beginPath();
+				const a = poly[0], b = poly[1];
+				ctx.moveTo(a.x * .45, a.y * .45); ctx.lineTo(b.x * .45, b.y * .45);
+				ctx.strokeStyle = "rgba(255,255,255,.32)"; ctx.lineWidth = 1.5; ctx.stroke();
+			}
+			function drawShape(object) {
+				ctx.save(); ctx.translate(object.x, object.y); ctx.rotate(object.angle);
+				if (object.type === "bomb") {
+					ctx.shadowBlur = 21; ctx.shadowColor = "#ff5149";
+					const gradient = ctx.createRadialGradient(-object.radius * .28, -object.radius * .35, 2, 0, 0, object.radius * 1.12);
+					gradient.addColorStop(0, "#ffb178"); gradient.addColorStop(.42, "#f34843"); gradient.addColorStop(1, "#641b27");
+					ctx.fillStyle = gradient; roundedPoly(object.poly, object.radius);
+					ctx.shadowBlur = 0; ctx.strokeStyle = "#ffc074"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, object.radius * .18, 0, Math.PI * 2); ctx.stroke();
+					ctx.fillStyle = "#fff0d2"; ctx.fillRect(-2, -object.radius * .75, 4, 7);
+				} else {
+					ctx.shadowBlur = 19; ctx.shadowColor = object.color;
+					const gradient = ctx.createLinearGradient(-object.radius, -object.radius, object.radius, object.radius);
+					gradient.addColorStop(0, object.color); gradient.addColorStop(1, "#273b40");
+					ctx.fillStyle = gradient; roundedPoly(object.poly, object.radius);
+				}
+				ctx.restore();
+			}
+			function drawPieces() {
+				for (const piece of pieces) {
+					ctx.save(); ctx.translate(piece.x, piece.y); ctx.rotate(piece.angle);
+					ctx.globalAlpha = clamp(piece.life / .7, 0, 1); ctx.shadowBlur = 13; ctx.shadowColor = piece.color;
+					ctx.fillStyle = piece.color; roundedPoly(piece.poly, 24); ctx.restore();
+				}
+			}
+			function drawTrail() {
+				if (trail.length < 2) return;
+				const blade = activeBlade();
+				for (let i = 1; i < trail.length; i++) {
+					const from = trail[i - 1], to = trail[i];
+					ctx.globalAlpha = clamp(Math.min(from.life, to.life) / .2, 0, 1);
+					ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y);
+					ctx.lineCap = "round"; ctx.lineJoin = "round";
+					ctx.strokeStyle = blade.effect === "pixel" ? `hsl(${(i * 47 + elapsed * 90) % 360} 100% 70%)` : blade.color;
+					ctx.lineWidth = blade.effect === "pixel" ? 3 : 4;
+					ctx.shadowBlur = blade.effect === "flame" ? 25 : 17; ctx.shadowColor = blade.color; ctx.stroke();
+					if (blade.effect === "pixel" && i % 3 === 0) { ctx.fillStyle = blade.color; ctx.fillRect(to.x - 2, to.y - 2, 4, 4); }
+				}
+				ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+			}
+			function drawBackground(dt) {
+				const gradient = ctx.createLinearGradient(0, 0, width * .78, height);
+				gradient.addColorStop(0, "#172321"); gradient.addColorStop(.47, "#101a1a"); gradient.addColorStop(1, "#211d1d");
+				ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, height);
+				const glowA = ctx.createRadialGradient(width * .12, height * .1, 0, width * .12, height * .1, width * .62);
+				glowA.addColorStop(0, "rgba(103,184,145,.12)"); glowA.addColorStop(1, "rgba(103,184,145,0)");
+				ctx.fillStyle = glowA; ctx.fillRect(0, 0, width, height);
+				const glowB = ctx.createRadialGradient(width * .86, height * .78, 0, width * .86, height * .78, width * .45);
+				glowB.addColorStop(0, "rgba(227,112,92,.09)"); glowB.addColorStop(1, "rgba(227,112,92,0)");
+				ctx.fillStyle = glowB; ctx.fillRect(0, 0, width, height);
+				for (const dot of ambience) {
+					dot.y -= dot.speed * dt;
+					if (dot.y < -5) { dot.y = height + 5; dot.x = Math.random() * width; }
+					const alpha = .12 + (Math.sin(elapsed + dot.phase) + 1) * .12;
+					ctx.fillStyle = `rgba(200,255,224,${alpha})`; ctx.beginPath(); ctx.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2); ctx.fill();
+				}
+			}
+			function update(dt) {
+				elapsed += dt;
+				if (screen === "playing") {
+					if (failTime > 0) { failTime -= dt; if (failTime <= 0) finishGame(); }
+					else {
+						spawnTimer -= dt;
+						if (spawnTimer <= 0) { spawnObject(); spawnTimer = Math.max(.42, .94 - elapsed * .003) * random(.76, 1.2); }
+						for (const object of objects) {
+							object.age += dt; object.x += object.vx * dt; object.y += object.vy * dt; object.vy += object.gravity * dt; object.angle += object.spin * dt;
+						}
+						objects = objects.filter(object => object.y < height + object.radius * 2.8 && object.age < 7);
+						if (comboTime > 0) comboTime -= dt; else if (combo) { combo = 0; document.querySelector("#combo").textContent = ""; }
+					}
+				}
+				for (const piece of pieces) {
+					piece.x += piece.vx * dt; piece.y += piece.vy * dt; piece.vy += piece.gravity * dt; piece.angle += piece.spin * dt; piece.life -= dt;
+				}
+				pieces = pieces.filter(piece => piece.life > 0 && piece.y < height + 160);
+				for (const particle of particles) {
+					particle.x += particle.vx * dt; particle.y += particle.vy * dt; particle.vy += particle.gravity * dt; particle.life -= dt;
+				}
+				particles = particles.filter(particle => particle.life > 0);
+				for (const point of trail) point.life -= dt;
+				trail = trail.filter(point => point.life > 0);
+				if (shakeTime > 0) { shakeTime -= dt; shake *= Math.max(0, 1 - dt * 7); }
+			}
+			function render(dt) {
+				drawBackground(dt);
+				ctx.save();
+				if (shakeTime > 0) ctx.translate(random(-shake, shake), random(-shake, shake));
+				if (screen === "playing" || screen === "pause" || screen === "gameover") {
+					for (const object of objects) drawShape(object);
+					drawPieces();
+					for (const particle of particles) {
+						ctx.globalAlpha = clamp(particle.life / particle.maxLife, 0, 1);
+						ctx.fillStyle = particle.color; ctx.shadowBlur = 8; ctx.shadowColor = particle.color;
+						ctx.beginPath(); ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2); ctx.fill();
+					}
+					ctx.globalAlpha = 1; ctx.shadowBlur = 0; drawTrail();
+				}
+				ctx.restore();
+			}
+			function frame(timestamp) {
+				const dt = Math.min(.033, Math.max(0, (timestamp - lastFrame) / 1000 || 0));
+				lastFrame = timestamp;
+				update(dt); render(dt);
+				requestAnimationFrame(frame);
+			}
+			updateCounters();
+			requestAnimationFrame(frame);
+		})();
+	</script>
+</body>
+</html>
+s
